@@ -1,103 +1,238 @@
-import Image from "next/image";
+"use client";
+
+import { useState } from "react";
+import DocumentManager from "@/components/DocumentManager";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Badge } from "@/components/ui/badge";
+import { ScrollArea } from "@/components/ui/scroll-area";
+import { Send, Loader2 } from "lucide-react";
 
 export default function Home() {
-  return (
-    <div className="font-sans grid grid-rows-[20px_1fr_20px] items-center justify-items-center min-h-screen p-8 pb-20 gap-16 sm:p-20">
-      <main className="flex flex-col gap-[32px] row-start-2 items-center sm:items-start">
-        <Image
-          className="dark:invert"
-          src="/next.svg"
-          alt="Next.js logo"
-          width={180}
-          height={38}
-          priority
-        />
-        <ol className="font-mono list-inside list-decimal text-sm/6 text-center sm:text-left">
-          <li className="mb-2 tracking-[-.01em]">
-            Get started by editing{" "}
-            <code className="bg-black/[.05] dark:bg-white/[.06] font-mono font-semibold px-1 py-0.5 rounded">
-              src/app/page.tsx
-            </code>
-            .
-          </li>
-          <li className="tracking-[-.01em]">
-            Save and see your changes instantly.
-          </li>
-        </ol>
+  const [files, setFiles] = useState<File[]>([]);
+  const [question, setQuestion] = useState<string>("");
+  const [selectedModel, setSelectedModel] = useState<string>("gpt-oss:20b");
+  const [messages, setMessages] = useState<{ 
+    role: string; 
+    content: string;
+    model?: string;
+    sources?: { fileName: string; similarity: string }[];
+  }[]>([]);
+  const [isLoading, setIsLoading] = useState<boolean>(false);
+  const [uploadedDocuments, setUploadedDocuments] = useState<{
+    fileName: string;
+    uploadDate: string;
+    fileType: string;
+    chunksCount: number;
+  }[]>([]);
 
-        <div className="flex gap-4 items-center flex-col sm:flex-row">
-          <a
-            className="rounded-full border border-solid border-transparent transition-colors flex items-center justify-center bg-foreground text-background gap-2 hover:bg-[#383838] dark:hover:bg-[#ccc] font-medium text-sm sm:text-base h-10 sm:h-12 px-4 sm:px-5 sm:w-auto"
-            href="https://vercel.com/new?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            <Image
-              className="dark:invert"
-              src="/vercel.svg"
-              alt="Vercel logomark"
-              width={20}
-              height={20}
-            />
-            Deploy now
-          </a>
-          <a
-            className="rounded-full border border-solid border-black/[.08] dark:border-white/[.145] transition-colors flex items-center justify-center hover:bg-[#f2f2f2] dark:hover:bg-[#1a1a1a] hover:border-transparent font-medium text-sm sm:text-base h-10 sm:h-12 px-4 sm:px-5 w-full sm:w-auto md:w-[158px]"
-            href="https://nextjs.org/docs?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            Read our docs
-          </a>
+  const availableModels = [
+    { value: "gpt-oss:20b", label: "GPT-OSS 20B (Powerful)" },
+    { value: "gemma3:12b", label: "Gemma3 12B (Balanced)" },
+    { value: "gemma3:4b", label: "Gemma3 4B (Medium)" },
+    { value: "llama3.2:3b", label: "Llama 3.2 3B (Fast)" }
+  ];
+
+  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    if (e.target.files) {
+      setFiles(Array.from(e.target.files));
+    }
+  };
+
+  const handleUpload = async () => {
+    if (files.length === 0) return;
+
+    const formData = new FormData();
+    files.forEach((file) => {
+      formData.append("files", file);
+    });
+
+    try {
+      const response = await fetch("/api/upload", {
+        method: "POST",
+        body: formData,
+      });
+
+      if (response.ok) {
+        const data = await response.json();
+        alert(`Files uploaded successfully! Created ${data.stats?.chunksCreated || 0} text chunks.`);
+        
+        // Update document list
+        const newDocs = files.map(file => ({
+          fileName: file.name,
+          uploadDate: new Date().toISOString(),
+          fileType: file.name.split('.').pop() || 'unknown',
+          chunksCount: Math.ceil(data.stats?.chunksCreated / files.length) || 0
+        }));
+        setUploadedDocuments(prev => [...prev, ...newDocs]);
+        setFiles([]);
+      } else {
+        const errorData = await response.json().catch(() => ({ error: "Upload failed" }));
+        alert(`File upload failed: ${errorData.error || "Unknown error"}`);
+      }
+    } catch (error) {
+      console.error("Error uploading files:", error);
+      alert("An error occurred while uploading files.");
+    }
+  };
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!question.trim()) return;
+
+    setMessages((prev) => [...prev, { role: "user", content: question }]);
+    setIsLoading(true);
+
+    try {
+      const response = await fetch("/api/chat", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({ question, model: selectedModel }),
+      });
+
+      if (response.ok) {
+        const data = await response.json();
+        setMessages((prev) => [
+          ...prev,
+          { 
+            role: "assistant", 
+            content: data.answer,
+            model: selectedModel,
+            sources: data.sources || []
+          },
+        ]);
+      } else {
+        const errorData = await response.json().catch(() => ({ error: "Unknown error" }));
+        setMessages((prev) => [
+          ...prev,
+          { role: "assistant", content: `Error: ${errorData.error || "Sorry, I had an error."}`, model: selectedModel },
+        ]);
+      }
+    } catch (error) {
+      console.error(error);
+      setMessages((prev) => [
+        ...prev,
+        { role: "assistant", content: "Sorry, I had an error." },
+      ]);
+    } finally {
+      setQuestion("");
+      setIsLoading(false);
+    }
+  };
+
+  return (
+    <div className="min-h-screen bg-gray-100 dark:bg-gray-900 text-gray-900 dark:text-gray-100">
+      <div className="container mx-auto p-4 max-h-screen flex flex-col">
+        <h1 className="text-3xl font-bold text-center mb-8">
+          HR Document Q&A
+        </h1>
+
+        <div className="grid grid-cols-1 md:grid-cols-12 gap-8 flex-1 min-h-0">
+          <DocumentManager
+            files={files}
+            setFiles={setFiles}
+            selectedModel={selectedModel}
+            setSelectedModel={setSelectedModel}
+            availableModels={availableModels}
+            onUpload={handleUpload}
+            uploadedDocuments={uploadedDocuments}
+            setUploadedDocuments={setUploadedDocuments}
+          />
+
+          <div className="md:col-span-8 flex flex-col min-h-0">
+            <Card className="flex-1 flex flex-col min-h-0">
+              <CardHeader className="flex-shrink-0">
+                <CardTitle className="flex items-center gap-2">
+                  <span>HR Document Q&A</span>
+                  {messages.length > 0 && (
+                    <Badge variant="secondary">
+                      {messages.filter(m => m.role === 'assistant').length} responses
+                    </Badge>
+                  )}
+                </CardTitle>
+              </CardHeader>
+              <CardContent className="flex flex-col flex-1 min-h-0 gap-4">
+                <ScrollArea className="flex-1 p-4 border rounded-md">
+                  <div className="space-y-4 pr-4">
+                    {messages.length === 0 && (
+                      <div className="text-center text-muted-foreground py-8">
+                        <p>Upload some documents and start asking questions!</p>
+                      </div>
+                    )}
+                    {messages.map((msg, index) => (
+                      <div
+                        key={index}
+                        className={`flex ${
+                          msg.role === "user" ? "justify-end" : "justify-start"
+                        }`}
+                      >
+                        <div
+                          className={`max-w-[80%] p-4 rounded-lg ${
+                            msg.role === "user"
+                              ? "bg-primary text-primary-foreground"
+                              : "bg-muted"
+                          }`}
+                        >
+                          <div className="flex justify-between items-start mb-2">
+                            <div className="font-semibold text-sm">
+                              {msg.role === "user" ? "You" : "Assistant"}
+                            </div>
+                            {msg.model && msg.role === "assistant" && (
+                              <Badge variant="outline" className="ml-2 text-xs">
+                                {availableModels.find(m => m.value === msg.model)?.label || msg.model}
+                              </Badge>
+                            )}
+                          </div>
+                          <div className="text-sm leading-relaxed">{msg.content}</div>
+                          {msg.sources && msg.sources.length > 0 && (
+                            <div className="mt-3 pt-3 border-t border-border/50">
+                              <div className="text-xs font-medium mb-2">Sources:</div>
+                              <div className="space-y-1">
+                                {msg.sources.map((source, srcIndex) => (
+                                  <div key={srcIndex} className="flex justify-between items-center text-xs">
+                                    <span className="truncate">{source.fileName}</span>
+                                    <Badge variant="secondary" className="ml-2 text-xs">
+                                      {source.similarity}
+                                    </Badge>
+                                  </div>
+                                ))}
+                              </div>
+                            </div>
+                          )}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </ScrollArea>
+                <form onSubmit={handleSubmit} className="flex gap-2 flex-shrink-0">
+                  <Input
+                    type="text"
+                    value={question}
+                    onChange={(e) => setQuestion(e.target.value)}
+                    placeholder="Ask a question about your documents..."
+                    disabled={isLoading}
+                    className="flex-grow"
+                  />
+                  <Button
+                    type="submit"
+                    disabled={isLoading || !question.trim()}
+                    size="icon"
+                  >
+                    {isLoading ? (
+                      <Loader2 className="h-4 w-4 animate-spin" />
+                    ) : (
+                      <Send className="h-4 w-4" />
+                    )}
+                  </Button>
+                </form>
+              </CardContent>
+            </Card>
+          </div>
         </div>
-      </main>
-      <footer className="row-start-3 flex gap-[24px] flex-wrap items-center justify-center">
-        <a
-          className="flex items-center gap-2 hover:underline hover:underline-offset-4"
-          href="https://nextjs.org/learn?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-          target="_blank"
-          rel="noopener noreferrer"
-        >
-          <Image
-            aria-hidden
-            src="/file.svg"
-            alt="File icon"
-            width={16}
-            height={16}
-          />
-          Learn
-        </a>
-        <a
-          className="flex items-center gap-2 hover:underline hover:underline-offset-4"
-          href="https://vercel.com/templates?framework=next.js&utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-          target="_blank"
-          rel="noopener noreferrer"
-        >
-          <Image
-            aria-hidden
-            src="/window.svg"
-            alt="Window icon"
-            width={16}
-            height={16}
-          />
-          Examples
-        </a>
-        <a
-          className="flex items-center gap-2 hover:underline hover:underline-offset-4"
-          href="https://nextjs.org?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-          target="_blank"
-          rel="noopener noreferrer"
-        >
-          <Image
-            aria-hidden
-            src="/globe.svg"
-            alt="Globe icon"
-            width={16}
-            height={16}
-          />
-          Go to nextjs.org →
-        </a>
-      </footer>
+      </div>
     </div>
   );
 }
