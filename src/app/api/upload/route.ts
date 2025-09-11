@@ -8,6 +8,7 @@ import { vectorStore } from "@/lib/vectorStore";
 import { v4 as uuidv4 } from "uuid";
 import { validateFileUpload, sanitizeFileName, MAX_FILES_PER_UPLOAD } from "@/lib/validation";
 import { CONFIG } from "@/lib/config";
+import { uploadRateLimit, getClientIdentifier, createRateLimitResponse } from "@/lib/rateLimit";
 
 export const config = {
   api: {
@@ -58,6 +59,13 @@ async function processFile(file: File): Promise<DocumentChunk[]> {
 }
 
 export async function POST(req: NextRequest) {
+  // Rate limiting
+  const clientId = getClientIdentifier(req);
+  if (!uploadRateLimit.isAllowed(clientId)) {
+    const resetTime = uploadRateLimit.getResetTime(clientId);
+    return createRateLimitResponse(resetTime);
+  }
+
   const formData = await req.formData();
   const files = formData.getAll("files") as File[];
 

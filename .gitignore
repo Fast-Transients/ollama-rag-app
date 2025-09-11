@@ -21,6 +21,7 @@ dist/
 # Database and uploads
 /db.json
 /vector-db.json
+data/
 uploads/
 
 # IDE and editor files

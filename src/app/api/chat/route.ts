@@ -4,6 +4,7 @@ import { generateEmbedding, findMostSimilar } from "@/lib/embeddings";
 import { vectorStore } from "@/lib/vectorStore";
 import { validateChatInput } from "@/lib/validation";
 import { CONFIG } from "@/lib/config";
+import { chatRateLimit, getClientIdentifier, createRateLimitResponse } from "@/lib/rateLimit";
 
 async function findRelevantChunks(question: string) {
   try {
@@ -28,6 +29,13 @@ async function findRelevantChunks(question: string) {
 }
 
 export async function POST(req: NextRequest) {
+  // Rate limiting
+  const clientId = getClientIdentifier(req);
+  if (!chatRateLimit.isAllowed(clientId)) {
+    const resetTime = chatRateLimit.getResetTime(clientId);
+    return createRateLimitResponse(resetTime);
+  }
+
   let model = CONFIG.DEFAULT_MODEL;
   
   try {
