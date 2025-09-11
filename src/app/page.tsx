@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect, useRef } from "react";
 import DocumentManager from "@/components/DocumentManager";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -8,16 +8,17 @@ import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Send, Loader2 } from "lucide-react";
+import ReactMarkdown from 'react-markdown';
 
 export default function Home() {
   const [files, setFiles] = useState<File[]>([]);
   const [question, setQuestion] = useState<string>("");
-  const [selectedModel, setSelectedModel] = useState<string>("gpt-oss:20b");
+  const [selectedModel, setSelectedModel] = useState<string>("gemma3:12b");
   const [messages, setMessages] = useState<{ 
     role: string; 
     content: string;
     model?: string;
-    sources?: { fileName: string; similarity: string }[];
+    sources?: { text: string; fileName: string; similarity: string }[];
   }[]>([]);
   const [isLoading, setIsLoading] = useState<boolean>(false);
   const [uploadedDocuments, setUploadedDocuments] = useState<{
@@ -26,19 +27,23 @@ export default function Home() {
     fileType: string;
     chunksCount: number;
   }[]>([]);
+  const [uploadStatus, setUploadStatus] = useState<string>("");
+  const messagesEndRef = useRef<HTMLDivElement>(null);
 
   const availableModels = [
-    { value: "gpt-oss:20b", label: "GPT-OSS 20B (Powerful)" },
     { value: "gemma3:12b", label: "Gemma3 12B (Balanced)" },
+    { value: "gpt-oss:20b", label: "GPT-OSS 20B (Powerful)" },
     { value: "gemma3:4b", label: "Gemma3 4B (Medium)" },
     { value: "llama3.2:3b", label: "Llama 3.2 3B (Fast)" }
   ];
 
-  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    if (e.target.files) {
-      setFiles(Array.from(e.target.files));
-    }
+  const scrollToBottom = () => {
+    messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
   };
+
+  useEffect(() => {
+    scrollToBottom();
+  }, [messages]);
 
   const handleUpload = async () => {
     if (files.length === 0) return;
@@ -56,7 +61,6 @@ export default function Home() {
 
       if (response.ok) {
         const data = await response.json();
-        alert(`Files uploaded successfully! Created ${data.stats?.chunksCreated || 0} text chunks.`);
         
         // Update document list
         const newDocs = files.map(file => ({
@@ -67,13 +71,19 @@ export default function Home() {
         }));
         setUploadedDocuments(prev => [...prev, ...newDocs]);
         setFiles([]);
+        setUploadStatus(`✅ Successfully processed ${files.length} file${files.length > 1 ? 's' : ''} (${data.stats?.chunksCreated} chunks created)`);
+        
+        // Clear success message after 5 seconds
+        setTimeout(() => setUploadStatus(""), 5000);
       } else {
         const errorData = await response.json().catch(() => ({ error: "Upload failed" }));
-        alert(`File upload failed: ${errorData.error || "Unknown error"}`);
+        setUploadStatus(`❌ Upload failed: ${errorData.error || "Unknown error"}`);
+        setTimeout(() => setUploadStatus(""), 5000);
       }
     } catch (error) {
       console.error("Error uploading files:", error);
-      alert("An error occurred while uploading files.");
+      setUploadStatus(`❌ Upload failed: ${error instanceof Error ? error.message : 'Network error'}`);
+      setTimeout(() => setUploadStatus(""), 5000);
     }
   };
 
@@ -126,11 +136,11 @@ export default function Home() {
   return (
     <div className="min-h-screen bg-gray-100 dark:bg-gray-900 text-gray-900 dark:text-gray-100">
       <div className="container mx-auto p-4 max-h-screen flex flex-col">
-        <h1 className="text-3xl font-bold text-center mb-8">
+        <h1 className="text-2xl md:text-3xl font-bold text-center mb-4 md:mb-8">
           HR Document Q&A
         </h1>
 
-        <div className="grid grid-cols-1 md:grid-cols-12 gap-8 flex-1 min-h-0">
+        <div className="flex flex-col lg:grid lg:grid-cols-12 gap-4 lg:gap-8 flex-1 min-h-0">
           <DocumentManager
             files={files}
             setFiles={setFiles}
@@ -140,22 +150,25 @@ export default function Home() {
             onUpload={handleUpload}
             uploadedDocuments={uploadedDocuments}
             setUploadedDocuments={setUploadedDocuments}
+            uploadStatus={uploadStatus}
           />
 
-          <div className="md:col-span-8 flex flex-col min-h-0">
+          <div className="lg:col-span-8 flex flex-col min-h-0 order-1 lg:order-2">
             <Card className="flex-1 flex flex-col min-h-0">
               <CardHeader className="flex-shrink-0">
-                <CardTitle className="flex items-center gap-2">
-                  <span>HR Document Q&A</span>
+                <CardTitle className="flex items-center gap-2 text-lg">
+                  <span className="hidden sm:inline">HR Document Q&A</span>
+                  <span className="sm:hidden">Chat</span>
                   {messages.length > 0 && (
-                    <Badge variant="secondary">
+                    <Badge variant="secondary" className="text-xs">
                       {messages.filter(m => m.role === 'assistant').length} responses
                     </Badge>
                   )}
                 </CardTitle>
               </CardHeader>
               <CardContent className="flex flex-col flex-1 min-h-0 gap-4">
-                <ScrollArea className="flex-1 p-4 border rounded-md">
+                <ScrollArea className="flex-1 p-3 md:p-4 border rounded-md"
+                  style={{ height: 'clamp(300px, 60vh, 600px)' }}>
                   <div className="space-y-4 pr-4">
                     {messages.length === 0 && (
                       <div className="text-center text-muted-foreground py-8">
@@ -170,10 +183,10 @@ export default function Home() {
                         }`}
                       >
                         <div
-                          className={`max-w-[80%] p-4 rounded-lg ${
+                          className={`w-full sm:max-w-[85%] p-3 md:p-4 rounded-lg shadow-sm ${
                             msg.role === "user"
                               ? "bg-primary text-primary-foreground"
-                              : "bg-muted"
+                              : "bg-card border"
                           }`}
                         >
                           <div className="flex justify-between items-start mb-2">
@@ -186,17 +199,42 @@ export default function Home() {
                               </Badge>
                             )}
                           </div>
-                          <div className="text-sm leading-relaxed">{msg.content}</div>
+                          <div className="text-sm leading-relaxed prose prose-sm max-w-none dark:prose-invert">
+                            {msg.role === "assistant" ? (
+                              <ReactMarkdown
+                                components={{
+                                  p: ({...props}) => <p className="mb-2 last:mb-0" {...props} />,
+                                  ul: ({...props}) => <ul className="mb-2 pl-4" {...props} />,
+                                  ol: ({...props}) => <ol className="mb-2 pl-4" {...props} />,
+                                  li: ({...props}) => <li className="mb-1" {...props} />,
+                                  code: ({...props}) => <code className="bg-muted px-1 py-0.5 rounded text-xs font-mono" {...props} />,
+                                  pre: ({...props}) => <pre className="bg-muted p-2 rounded text-xs overflow-x-auto" {...props} />,
+                                  blockquote: ({...props}) => <blockquote className="border-l-2 border-muted-foreground/20 pl-2 italic" {...props} />,
+                                  strong: ({...props}) => <strong className="font-semibold" {...props} />,
+                                  em: ({...props}) => <em className="italic" {...props} />,
+                                }}
+                              >
+                                {msg.content}
+                              </ReactMarkdown>
+                            ) : (
+                              <div className="whitespace-pre-wrap break-words">{msg.content}</div>
+                            )}
+                          </div>
                           {msg.sources && msg.sources.length > 0 && (
-                            <div className="mt-3 pt-3 border-t border-border/50">
-                              <div className="text-xs font-medium mb-2">Sources:</div>
-                              <div className="space-y-1">
+                            <div className="mt-3 pt-3 border-t border-border/20">
+                              <div className="text-xs font-medium mb-3 text-muted-foreground">Sources ({msg.sources.length}):</div>
+                              <div className="space-y-3">
                                 {msg.sources.map((source, srcIndex) => (
-                                  <div key={srcIndex} className="flex justify-between items-center text-xs">
-                                    <span className="truncate">{source.fileName}</span>
-                                    <Badge variant="secondary" className="ml-2 text-xs">
-                                      {source.similarity}
-                                    </Badge>
+                                  <div key={srcIndex} className="bg-muted/30 rounded p-2 md:p-3 space-y-2">
+                                    <div className="text-xs italic text-muted-foreground leading-relaxed break-words">
+                                      "{source.text}"
+                                    </div>
+                                    <div className="flex flex-col sm:flex-row sm:justify-between sm:items-center gap-2">
+                                      <span className="font-mono text-xs text-muted-foreground truncate">📄 {source.fileName}</span>
+                                      <Badge variant="secondary" className="text-xs self-start sm:self-auto">
+                                        {(parseFloat(source.similarity) * 100).toFixed(1)}% match
+                                      </Badge>
+                                    </div>
                                   </div>
                                 ))}
                               </div>
@@ -205,6 +243,7 @@ export default function Home() {
                         </div>
                       </div>
                     ))}
+                    <div ref={messagesEndRef} />
                   </div>
                 </ScrollArea>
                 <form onSubmit={handleSubmit} className="flex gap-2 flex-shrink-0">
@@ -214,12 +253,13 @@ export default function Home() {
                     onChange={(e) => setQuestion(e.target.value)}
                     placeholder="Ask a question about your documents..."
                     disabled={isLoading}
-                    className="flex-grow"
+                    className="flex-grow text-base md:text-sm"
                   />
                   <Button
                     type="submit"
                     disabled={isLoading || !question.trim()}
                     size="icon"
+                    className="h-10 w-10 md:h-9 md:w-9"
                   >
                     {isLoading ? (
                       <Loader2 className="h-4 w-4 animate-spin" />

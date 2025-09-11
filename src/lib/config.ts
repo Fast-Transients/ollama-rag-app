@@ -14,7 +14,7 @@ export const CONFIG = {
   VECTOR_DB_FILE: 'vector-db.json',
   
   // Ollama
-  DEFAULT_MODEL: 'gpt-oss:20b',
+  DEFAULT_MODEL: 'gemma3:12b',
   EMBEDDING_MODEL: 'nomic-embed-text',
   
   // UI

@@ -28,8 +28,11 @@ async function findRelevantChunks(question: string) {
 }
 
 export async function POST(req: NextRequest) {
+  let model = CONFIG.DEFAULT_MODEL;
+  
   try {
-    const { question, model = CONFIG.DEFAULT_MODEL } = await req.json();
+    const { question, model: requestModel = CONFIG.DEFAULT_MODEL } = await req.json();
+    model = requestModel;
     
     // Validate input
     const validatedQuestion = validateChatInput(question, model);
@@ -59,6 +62,7 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ 
       answer: response.response,
       sources: relevantChunks.map(chunk => ({
+        text: chunk.text.length > 150 ? chunk.text.substring(0, 150) + "..." : chunk.text,
         fileName: chunk.metadata.fileName,
         similarity: chunk.similarity?.toFixed(3) || "N/A"
       }))
