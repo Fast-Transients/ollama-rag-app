@@ -154,6 +154,5 @@ class RateLimiter {
 5. Review and improve security measures
 
 ### Contact Information
-- Security team: security@company.com
-- Emergency contact: on-call@company.com
+- Security team: security@fasttransients.ai
 - Vendor support: Ollama, Next.js communities
