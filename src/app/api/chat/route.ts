@@ -4,6 +4,7 @@ import { generateEmbedding, findMostSimilar } from "@/lib/embeddings";
 import { vectorStore } from "@/lib/vectorStore";
 import { validateChatInput } from "@/lib/validation";
 import { CONFIG } from "@/lib/config";
+import { chatRateLimit, getClientIdentifier, createRateLimitResponse } from "@/lib/rateLimit";
 
 async function findRelevantChunks(question: string) {
   try {
@@ -28,8 +29,18 @@ async function findRelevantChunks(question: string) {
 }
 
 export async function POST(req: NextRequest) {
+  // Rate limiting
+  const clientId = getClientIdentifier(req);
+  if (!chatRateLimit.isAllowed(clientId)) {
+    const resetTime = chatRateLimit.getResetTime(clientId);
+    return createRateLimitResponse(resetTime);
+  }
+
+  let model = CONFIG.DEFAULT_MODEL;
+  
   try {
-    const { question, model = CONFIG.DEFAULT_MODEL } = await req.json();
+    const { question, model: requestModel = CONFIG.DEFAULT_MODEL } = await req.json();
+    model = requestModel;
     
     // Validate input
     const validatedQuestion = validateChatInput(question, model);
@@ -59,6 +70,7 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ 
       answer: response.response,
       sources: relevantChunks.map(chunk => ({
+        text: chunk.text.length > 150 ? chunk.text.substring(0, 150) + "..." : chunk.text,
         fileName: chunk.metadata.fileName,
         similarity: chunk.similarity?.toFixed(3) || "N/A"
       }))

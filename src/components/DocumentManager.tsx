@@ -6,7 +6,6 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Separator } from "@/components/ui/separator";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
 import { ChevronLeft, ChevronRight, Upload, Trash2, FileText, BarChart3 } from "lucide-react";
 
 interface Document {
@@ -32,6 +31,7 @@ interface DocumentManagerProps {
   onUpload: () => void;
   uploadedDocuments: Document[];
   setUploadedDocuments: (docs: Document[]) => void;
+  uploadStatus: string;
 }
 
 export default function DocumentManager({
@@ -43,6 +43,7 @@ export default function DocumentManager({
   onUpload,
   uploadedDocuments,
   setUploadedDocuments,
+  uploadStatus,
 }: DocumentManagerProps) {
   const [isExpanded, setIsExpanded] = useState(true);
   const [stats, setStats] = useState<Stats>({
@@ -79,12 +80,12 @@ export default function DocumentManager({
   };
 
   return (
-    <div className={`transition-all duration-300 ${
-      isExpanded ? 'md:col-span-4' : 'md:col-span-1'
+    <div className={`transition-all duration-300 order-2 lg:order-1 ${
+      isExpanded ? 'lg:col-span-4' : 'lg:col-span-1'
     }`}>
-      <Card className="h-full">
+      <Card className="h-full lg:h-auto">
         {/* Always visible header with expand/collapse button */}
-        <CardHeader className="pb-3">
+        <CardHeader className="pb-3 relative">
           <div className="flex justify-between items-center">
             {isExpanded ? (
               <div className="flex items-center gap-2">
@@ -92,16 +93,17 @@ export default function DocumentManager({
                 <CardTitle className="text-lg">Documents</CardTitle>
               </div>
             ) : (
-              <div className="flex flex-col items-center w-full">
+              <div className="flex flex-col items-center w-full pr-8">
                 <FileText className="h-5 w-5 mb-1" />
                 <div className="text-xs font-medium text-center">Docs</div>
               </div>
             )}
             <Button
-              variant="ghost"
+              variant={!isExpanded ? "default" : "ghost"}
               size="sm"
               onClick={() => setIsExpanded(!isExpanded)}
-              className={`h-8 w-8 p-0 shrink-0 ${!isExpanded ? 'absolute top-2 right-2' : ''}`}
+              className={`h-8 w-8 p-0 shrink-0 z-10 ${!isExpanded ? 'absolute top-2 right-2 bg-primary text-primary-foreground hover:bg-primary/90 lg:static lg:relative' : ''}`}
+              title={isExpanded ? "Collapse panel" : "Expand panel"}
             >
               {isExpanded ? (
                 <ChevronLeft className="h-4 w-4" />
@@ -198,6 +200,17 @@ export default function DocumentManager({
                     <Upload className="h-4 w-4 mr-2" />
                     Upload {files.length > 0 && `(${files.length})`}
                   </Button>
+                  {uploadStatus && (
+                    <div className={`text-xs p-2 rounded-md ${
+                      uploadStatus.includes('✅') 
+                        ? 'bg-green-50 text-green-700 border border-green-200 dark:bg-green-900/20 dark:text-green-300 dark:border-green-800'
+                        : uploadStatus.includes('❌')
+                        ? 'bg-red-50 text-red-700 border border-red-200 dark:bg-red-900/20 dark:text-red-300 dark:border-red-800'
+                        : 'bg-blue-50 text-blue-700 border border-blue-200 dark:bg-blue-900/20 dark:text-blue-300 dark:border-blue-800'
+                    }`}>
+                      {uploadStatus}
+                    </div>
+                  )}
                 </CardContent>
               </Card>
             

@@ -24,7 +24,7 @@ export function validateChatInput(question: string, model?: string) {
     throw new Error(`Question too long. Maximum ${MAX_QUESTION_LENGTH} characters allowed.`);
   }
   
-  if (model && !VALID_MODELS.includes(model as any)) {
+  if (model && !VALID_MODELS.includes(model as typeof VALID_MODELS[number])) {
     throw new Error('Invalid model selected');
   }
   
@@ -43,9 +43,8 @@ export function validateFileUpload(file: File) {
   
   // Check file type
   const extension = '.' + file.name.split('.').pop()?.toLowerCase();
-  const isValidType = Object.values(ALLOWED_FILE_TYPES).some(extensions => 
-    extensions.includes(extension as any)
-  );
+  const allowedExtensions = Object.values(ALLOWED_FILE_TYPES).flat();
+  const isValidType = extension ? allowedExtensions.includes(extension) : false;
   
   if (!isValidType) {
     throw new Error(`File "${file.name}" has an unsupported format. Allowed: PDF, DOCX, TXT.`);

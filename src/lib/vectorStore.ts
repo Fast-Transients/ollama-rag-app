@@ -7,8 +7,7 @@ export class VectorStore {
   private chunks: DocumentChunk[] = [];
 
   constructor() {
-    this.dbPath = path.join(process.cwd(), "/vector-db.json");
-    this.loadData();
+    this.dbPath = path.join(process.cwd(), "data", "vector-db.json");
   }
 
   private async loadData(): Promise<void> {
@@ -26,10 +25,20 @@ export class VectorStore {
       chunks: this.chunks,
       lastUpdated: new Date().toISOString()
     };
+    
+    // Ensure data directory exists
+    const dataDir = path.dirname(this.dbPath);
+    try {
+      await fs.access(dataDir);
+    } catch {
+      await fs.mkdir(dataDir, { recursive: true });
+    }
+    
     await fs.writeFile(this.dbPath, JSON.stringify(data, null, 2));
   }
 
   async addChunks(newChunks: DocumentChunk[]): Promise<void> {
+    await this.loadData();
     this.chunks.push(...newChunks);
     await this.saveData();
   }
