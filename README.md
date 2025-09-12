@@ -1,4 +1,5 @@
-# HR Document RAG System
+# Local Document RAG System
+[![CodeQL](https://github.com/Fast-Transients/ollama-rag-app/actions/workflows/github-code-scanning/codeql/badge.svg)](https://github.com/Fast-Transients/ollama-rag-app/actions/workflows/github-code-scanning/codeql)
 
 A local Retrieval-Augmented Generation system for HR documents using Ollama for secure AI inference. All processing happens locally with no external dependencies.
 
