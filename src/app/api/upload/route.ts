@@ -123,8 +123,9 @@ export async function POST(req: NextRequest) {
   // Store chunks in vector database
   await vectorStore.addChunks(allChunks);
 
-  const stats = vectorStore.getStats();
-  return NextResponse.json({ 
+  // Retrieve stats from the vector store after persisting data
+  const stats = await vectorStore.getStats();
+  return NextResponse.json({
     message: "Files uploaded and processed successfully.",
     stats: {
       chunksCreated: allChunks.length,
