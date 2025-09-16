@@ -64,7 +64,12 @@ export class VectorStore {
     await this.saveData();
   }
 
-  getStats(): { totalChunks: number; uniqueFiles: number } {
+  /**
+   * Load the current store from disk and return basic statistics.
+   * Ensures stats remain accurate across server restarts.
+   */
+  async getStats(): Promise<{ totalChunks: number; uniqueFiles: number }> {
+    await this.loadData();
     const uniqueFiles = new Set(this.chunks.map(chunk => chunk.metadata.fileName));
     return {
       totalChunks: this.chunks.length,
