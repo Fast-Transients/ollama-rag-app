@@ -47,7 +47,7 @@ ollama pull gpt-oss:20b
 git clone https://github.com/yourusername/doc-query-app.git
 cd doc-query-app
 npm install
-npm run dev
+xq
 ```
 
 Open http://localhost:3000
