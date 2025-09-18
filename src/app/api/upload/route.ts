@@ -16,6 +16,8 @@ export const config = {
   },
 };
 
+
+
 async function processFile(file: File): Promise<DocumentChunk[]> {
   const buffer = Buffer.from(await file.arrayBuffer());
   const fileExtension = path.extname(file.name).toLowerCase();

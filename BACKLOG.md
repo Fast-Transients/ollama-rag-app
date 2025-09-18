@@ -24,3 +24,8 @@ This document tracks the identified issues and planned improvements for the Olla
     *   **Task:** Implement a more sophisticated text chunking strategy (e.g., token-based or sentence-based).
 *   **[Done] Basic Error Handling:** Error handling could be more robust and provide more specific feedback to the user.
     *   **Task:** Improve error handling throughout the application.
+
+## Blocked
+
+*   **End-to-End Testing:** The end-to-end test suite is failing due to issues with the test environment. The Next.js development server is not consistently ready to handle requests, causing the tests to fail.
+    *   **Task:** Investigate and resolve the test environment issues to enable reliable end-to-end testing.
