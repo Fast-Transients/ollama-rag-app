@@ -16,6 +16,8 @@ export const config = {
   },
 };
 
+
+
 async function processFile(file: File): Promise<DocumentChunk[]> {
   const buffer = Buffer.from(await file.arrayBuffer());
   const fileExtension = path.extname(file.name).toLowerCase();
@@ -98,9 +100,7 @@ export async function POST(req: NextRequest) {
     await fs.mkdir(uploadDir, { recursive: true });
   }
 
-  const allChunks: DocumentChunk[] = [];
-
-  for (const file of files) {
+  const results = await Promise.all(files.map(async (file) => {
     try {
       // Save the file with sanitized name
       const buffer = Buffer.from(await file.arrayBuffer());
@@ -110,23 +110,27 @@ export async function POST(req: NextRequest) {
       
       // Process file and generate chunks with embeddings
       const chunks = await processFile(file);
-      allChunks.push(...chunks);
+      return { success: true, fileName: file.name, chunks };
     } catch (error) {
       console.error(`Error processing file ${file.name}:`, error);
-      return NextResponse.json(
-        { error: `Failed to process file: ${file.name}` },
-        { status: 500 }
-      );
+      return { success: false, fileName: file.name, error: error instanceof Error ? error.message : "Unknown error" };
     }
+  }));
+
+  const successfulUploads = results.filter(r => r.success);
+  const failedUploads = results.filter(r => !r.success);
+
+  const allChunks = successfulUploads.flatMap(r => r.chunks);
+
+  if (allChunks.length > 0) {
+    await vectorStore.addChunks(allChunks);
   }
 
-  // Store chunks in vector database
-  await vectorStore.addChunks(allChunks);
-
-  // Retrieve stats from the vector store after persisting data
   const stats = await vectorStore.getStats();
+
   return NextResponse.json({
-    message: "Files uploaded and processed successfully.",
+    message: `${successfulUploads.length} files uploaded and processed successfully.`,
+    failedFiles: failedUploads.map(f => ({ fileName: f.fileName, error: f.error })),
     stats: {
       chunksCreated: allChunks.length,
       totalChunks: stats.totalChunks,

@@ -1,80 +1,75 @@
-import { promises as fs } from "fs";
-import path from "path";
+import { getChromaCollection } from "./chroma";
 import { DocumentChunk } from "./embeddings";
 
 export class VectorStore {
-  private dbPath: string;
-  private chunks: DocumentChunk[] = [];
-
-  constructor() {
-    this.dbPath = path.join(process.cwd(), "data", "vector-db.json");
-  }
-
-  private async loadData(): Promise<void> {
-    try {
-      const content = await fs.readFile(this.dbPath, "utf-8");
-      const data = JSON.parse(content);
-      this.chunks = data.chunks || [];
-    } catch {
-      this.chunks = [];
-    }
-  }
-
-  private async saveData(): Promise<void> {
-    const data = {
-      chunks: this.chunks,
-      lastUpdated: new Date().toISOString()
-    };
-    
-    // Ensure data directory exists
-    const dataDir = path.dirname(this.dbPath);
-    try {
-      await fs.access(dataDir);
-    } catch {
-      await fs.mkdir(dataDir, { recursive: true });
-    }
-    
-    await fs.writeFile(this.dbPath, JSON.stringify(data, null, 2));
-  }
-
   async addChunks(newChunks: DocumentChunk[]): Promise<void> {
-    await this.loadData();
-    this.chunks.push(...newChunks);
-    await this.saveData();
+    const collection = await getChromaCollection();
+    await collection.add({
+      ids: newChunks.map(chunk => chunk.id),
+      embeddings: newChunks.map(chunk => chunk.embedding),
+      documents: newChunks.map(chunk => chunk.text),
+      metadatas: newChunks.map(chunk => chunk.metadata),
+    });
   }
 
-  async getAllChunks(): Promise<DocumentChunk[]> {
-    await this.loadData();
-    return this.chunks;
+  async getAllChunks(): Promise<any[]> {
+    const collection = await getChromaCollection();
+    const results = await collection.get();
+    return results.documents;
   }
 
-  async getChunksByFileName(fileName: string): Promise<DocumentChunk[]> {
-    await this.loadData();
-    return this.chunks.filter(chunk => chunk.metadata.fileName === fileName);
+  async getChunksByFileName(fileName: string): Promise<any[]> {
+    const collection = await getChromaCollection();
+    const results = await collection.get({ where: { fileName } });
+    return results.documents;
   }
 
   async deleteChunksByFileName(fileName: string): Promise<void> {
-    await this.loadData();
-    this.chunks = this.chunks.filter(chunk => chunk.metadata.fileName !== fileName);
-    await this.saveData();
+    const collection = await getChromaCollection();
+    const results = await collection.get({ where: { fileName } });
+    if (results.ids.length > 0) {
+        await collection.delete({ ids: results.ids });
+    }
   }
 
   async clear(): Promise<void> {
-    this.chunks = [];
-    await this.saveData();
+    const collection = await getChromaCollection();
+    await collection.delete();
   }
 
-  /**
-   * Load the current store from disk and return basic statistics.
-   * Ensures stats remain accurate across server restarts.
-   */
   async getStats(): Promise<{ totalChunks: number; uniqueFiles: number }> {
-    await this.loadData();
-    const uniqueFiles = new Set(this.chunks.map(chunk => chunk.metadata.fileName));
+    const collection = await getChromaCollection();
+    const results = await collection.get();
+    const uniqueFiles = new Set(results.metadatas.map((m: any) => m.fileName));
     return {
-      totalChunks: this.chunks.length,
-      uniqueFiles: uniqueFiles.size
+      totalChunks: results.ids.length,
+      uniqueFiles: uniqueFiles.size,
     };
+  }
+
+  async findMostSimilar(queryEmbedding: number[], topK: number): Promise<(DocumentChunk & { similarity: number })[]> {
+    const collection = await getChromaCollection();
+    const results = await collection.query({
+      queryEmbeddings: [queryEmbedding],
+      nResults: topK,
+    });
+
+    if (!results.ids || !results.ids[0]) {
+      return [];
+    }
+
+    const chunks: (DocumentChunk & { similarity: number })[] = [];
+    for (let i = 0; i < results.ids[0].length; i++) {
+      chunks.push({
+        id: results.ids[0][i],
+        text: results.documents[0][i],
+        embedding: results.embeddings ? results.embeddings[0][i] : [],
+        metadata: results.metadatas[0][i] as any,
+        similarity: results.distances ? 1 - results.distances[0][i] : 0,
+      });
+    }
+
+    return chunks;
   }
 }
 

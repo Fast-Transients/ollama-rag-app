@@ -1,5 +1,6 @@
 import ollama from "ollama";
 import { CONFIG } from "./config";
+import { split } from "sentence-splitter";
 
 export interface DocumentChunk {
   id: string;
@@ -38,49 +39,22 @@ export async function generateEmbedding(text: string): Promise<number[]> {
   }
 }
 
-export function chunkText(text: string, chunkSize: number = CONFIG.CHUNK_SIZE, overlap: number = CONFIG.CHUNK_OVERLAP): string[] {
-  const words = text.split(/\s+/);
+export function chunkText(text: string): string[] {
+  const sentences = split(text).filter(s => s.trim().length > 0);
   const chunks: string[] = [];
-  
-  for (let i = 0; i < words.length; i += chunkSize - overlap) {
-    const chunk = words.slice(i, i + chunkSize).join(" ");
-    if (chunk.trim()) {
-      chunks.push(chunk.trim());
+  let currentChunk = "";
+
+  for (const sentence of sentences) {
+    if (currentChunk.length + sentence.length > CONFIG.CHUNK_SIZE) {
+      chunks.push(currentChunk.trim());
+      currentChunk = "";
     }
+    currentChunk += ` ${sentence}`;
   }
-  
+
+  if (currentChunk.length > 0) {
+    chunks.push(currentChunk.trim());
+  }
+
   return chunks;
-}
-
-export function cosineSimilarity(a: number[], b: number[]): number {
-  if (a.length !== b.length) {
-    throw new Error("Vectors must have the same length");
-  }
-  
-  let dotProduct = 0;
-  let normA = 0;
-  let normB = 0;
-  
-  for (let i = 0; i < a.length; i++) {
-    dotProduct += a[i] * b[i];
-    normA += a[i] * a[i];
-    normB += b[i] * b[i];
-  }
-  
-  return dotProduct / (Math.sqrt(normA) * Math.sqrt(normB));
-}
-
-export function findMostSimilar(
-  queryEmbedding: number[],
-  documentChunks: DocumentChunk[],
-  topK: number = 3
-): (DocumentChunk & { similarity: number })[] {
-  const similarities = documentChunks.map(chunk => ({
-    ...chunk,
-    similarity: cosineSimilarity(queryEmbedding, chunk.embedding)
-  }));
-  
-  return similarities
-    .sort((a, b) => b.similarity - a.similarity)
-    .slice(0, topK);
 }
